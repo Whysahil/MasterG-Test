@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 // Initialize AI Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || 'dummy_key_for_demo' });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // CACHE SIMULATION (Session Storage)
 // In a real app, this would be Redis or a Database Table 'ai_explanations_cache'
@@ -26,7 +26,7 @@ export const aiTutorService = {
 
     // 2. Fallback for demo if no key
     if (!process.env.API_KEY) {
-      return `**[DEMO MODE: AI KEY NOT FOUND]**\n\nTo see real AI responses, please configure the API_KEY.\n\n**Simulated Explanation:**\n\n1. **Concept**: The question asks about ${subject}.\n2. **Solution**: The correct logic involves applying the basic formula.\n3. **Shortcut**: Use the elimination method.`;
+      return `**[DEMO MODE: AI KEY NOT FOUND]**\n\nTo see real AI responses, please configure API_KEY in your environment variables.\n\n**Simulated Explanation:**\n\n1. **Concept**: The question asks about ${subject}.\n2. **Solution**: The correct logic involves applying the basic formula.\n3. **Shortcut**: Use the elimination method.`;
     }
 
     const correctOption = options.find(o => o.isCorrect);
