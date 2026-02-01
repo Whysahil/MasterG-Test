@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 // Initialize AI Client
+// The API key must be obtained exclusively from the environment variable process.env.API_KEY.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // CACHE SIMULATION (Session Storage)
