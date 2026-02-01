@@ -1,8 +1,19 @@
 import { GoogleGenAI } from "@google/genai";
 
 // Initialize AI Client
-// The API key must be obtained exclusively from the environment variable process.env.API_KEY.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Use optional chaining (?.) for import.meta.env to prevent crashes in some environments.
+// @ts-ignore
+const API_KEY = import.meta.env?.VITE_API_KEY || '';
+
+// Initialize client only if API Key exists to prevent "API key must be set" error
+let ai: GoogleGenAI | null = null;
+if (API_KEY) {
+  try {
+    ai = new GoogleGenAI({ apiKey: API_KEY });
+  } catch (error) {
+    console.warn("Failed to initialize GoogleGenAI client:", error);
+  }
+}
 
 // CACHE SIMULATION (Session Storage)
 // In a real app, this would be Redis or a Database Table 'ai_explanations_cache'
@@ -25,9 +36,9 @@ export const aiTutorService = {
     const cached = getCachedExplanation(cacheKey);
     if (cached) return cached;
 
-    // 2. Fallback for demo if no key
-    if (!process.env.API_KEY) {
-      return `**[DEMO MODE: AI KEY NOT FOUND]**\n\nTo see real AI responses, please configure API_KEY in your environment variables.\n\n**Simulated Explanation:**\n\n1. **Concept**: The question asks about ${subject}.\n2. **Solution**: The correct logic involves applying the basic formula.\n3. **Shortcut**: Use the elimination method.`;
+    // 2. Fallback for demo if no client or key
+    if (!ai) {
+      return `**[DEMO MODE: AI KEY NOT FOUND]**\n\nTo see real AI responses, please configure VITE_API_KEY in your Vercel Environment Variables.\n\n**Simulated Explanation:**\n\n1. **Concept**: The question asks about ${subject}.\n2. **Solution**: The correct logic involves applying the basic formula.\n3. **Shortcut**: Use the elimination method.`;
     }
 
     const correctOption = options.find(o => o.isCorrect);
@@ -71,7 +82,7 @@ export const aiTutorService = {
   },
 
   getAttemptAnalysis: async (testTitle: string, score: number, totalMarks: number, accuracy: number, weakTopics: string[]): Promise<string> => {
-     if (!process.env.API_KEY) return "Great effort! Focus on your accuracy and review the subjects where you lost marks.";
+     if (!ai) return "Great effort! Focus on your accuracy and review the subjects where you lost marks.";
      // ... Implementation ...
      return "Keep practicing!";
   }
