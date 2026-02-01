@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type, Schema } from "@google/genai";
 
 // Initialize AI Client
 // Use optional chaining (?.) for import.meta.env to prevent crashes in some environments.
@@ -16,7 +16,6 @@ if (API_KEY) {
 }
 
 // CACHE SIMULATION (Session Storage)
-// In a real app, this would be Redis or a Database Table 'ai_explanations_cache'
 const getCachedExplanation = (key: string) => sessionStorage.getItem(`ai_cache_${key}`);
 const setCachedExplanation = (key: string, value: string) => sessionStorage.setItem(`ai_cache_${key}`, value);
 
@@ -83,7 +82,82 @@ export const aiTutorService = {
 
   getAttemptAnalysis: async (testTitle: string, score: number, totalMarks: number, accuracy: number, weakTopics: string[]): Promise<string> => {
      if (!ai) return "Great effort! Focus on your accuracy and review the subjects where you lost marks.";
-     // ... Implementation ...
      return "Keep practicing!";
-  }
+  },
+
+  /**
+   * Generates real exam questions using the Senior Exam Setter Persona.
+   */
+  generateMockQuestions: async (subject: string, count: number, examType: string = 'SSC CGL'): Promise<any[]> => {
+    if (!ai) return [];
+
+    const prompt = `
+You are a senior Government Exam Paper Setter, Exam Analyst, and AI Question Generation Expert with deep knowledge of Indian competitive exams.
+
+Your task is to generate ${count} HIGH-QUALITY, REALISTIC, EXAM-LEVEL MCQ QUESTIONS.
+
+================================================
+EXAM CONTEXT
+================================================
+Exam Type: ${examType}
+Subject: ${subject}
+
+================================================
+STRICT GENERATION RULES
+================================================
+1. GENERATE ONLY questions that have been asked before (PYQ) OR expected questions based on trends.
+2. NO generic, instructional, or dummy questions.
+3. Questions must be indistinguishable from real government exam questions.
+4. If Subject = Quantitative Aptitude, include values that are calculation-friendly but tricky.
+5. If Subject = General Awareness, focus on Static GK or Current Affairs (last 1-2 years).
+
+================================================
+OUTPUT FORMAT (JSON)
+================================================
+Return a JSON Array. Each object must have:
+- questionText: The exact exam-style question string.
+- options: An array of exactly 4 strings.
+- correctOptionIndex: Integer (0-3).
+- explanation: A detailed explanation including the 'Question Source' (e.g., 'Previous Year Question (SSC CGL 2022)' or 'Expected Question based on trend').
+- subject: The specific topic (e.g., 'Polity', 'Profit & Loss').
+- difficulty: One of 'EASY', 'MEDIUM', 'HARD'.
+    `;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                questionText: { type: Type.STRING },
+                options: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                },
+                correctOptionIndex: { type: Type.INTEGER },
+                explanation: { type: Type.STRING },
+                subject: { type: Type.STRING },
+                difficulty: { type: Type.STRING, enum: ['EASY', 'MEDIUM', 'HARD'] }
+              }
+            }
+          }
+        }
+      });
+
+      if (response.text) {
+        return JSON.parse(response.text);
+      }
+      return [];
+    } catch (e) {
+      console.error("Failed to generate questions", e);
+      return [];
+    }
+  },
+  
+  hasApiKey: () => !!API_KEY
 };

@@ -1,5 +1,5 @@
-
 import { ExamCategory, Test, Question, User, Role, TestAttempt, Option, Mistake, AdminStats, AuditLog } from '../types';
+import { aiTutorService } from './aiTutor';
 
 /**
  * MASTERG DBMS SIMULATION LAYER
@@ -81,6 +81,9 @@ const SEED_USERS: any[] = [
     { id: '2', userCode: 'STU1001', name: 'Rahul Student', email: 'student@example.com', role: Role.STUDENT, password: 'password', isBlocked: false, joinedAt: '2023-06-15', streakDays: 5 },
 ];
 
+// Dynamic Question Cache to ensure grading consistency for AI questions
+const generatedQuestionBank: Record<string, Question[]> = {};
+
 // Helper to shuffle array
 const shuffle = <T>(array: T[]): T[] => {
     let currentIndex = array.length,  randomIndex;
@@ -93,7 +96,8 @@ const shuffle = <T>(array: T[]): T[] => {
     return newArr;
 };
 
-const generateQuestions = (testId: string, count: number, offset: number = 0): Question[] => {
+// Fallback Dumb Generator (No AI)
+const generateDummyQuestions = (testId: string, count: number, offset: number = 0): Question[] => {
   const subjects = ['General Intelligence', 'General Awareness', 'Quantitative Aptitude', 'English'];
   const questions: Question[] = [];
   for (let i = 0; i < count; i++) {
@@ -102,7 +106,7 @@ const generateQuestions = (testId: string, count: number, offset: number = 0): Q
     questions.push({
       id: `gen_q${globalIndex + 1}_${testId}`, 
       testId: null, 
-      text: `Generated Question #${globalIndex + 1} [${subjects[subjectIndex]}]: Select Option B for correct answer.`,
+      text: `[DEMO MODE] Generated Question #${globalIndex + 1} [${subjects[subjectIndex]}]: Select Option B for correct answer. (Configure API Key for Real AI Questions)`,
       positiveMarks: 2, 
       negativeMarks: 0.5, 
       subject: subjects[subjectIndex],
@@ -221,31 +225,114 @@ export const db = {
   },
 
   getQuestionsForTest: async (testId: string): Promise<Question[]> => {
+    // 1. Check if we already generated questions for this session (Caching)
+    if (generatedQuestionBank[testId] && generatedQuestionBank[testId].length > 0) {
+       return generatedQuestionBank[testId];
+    }
+
+    // 2. Determine configuration
+    let count = 10;
+    if (testId === 'mock_25' || testId === 't1' || testId === 't2') count = 25;
+    
+    // 3. AI GENERATION (Real World Mode)
+    if (aiTutorService.hasApiKey() && (testId.includes('mock') || testId.includes('unlimited') || testId === 't1' || testId === 't2')) {
+       const subject = testId.includes('t2') ? 'Banking' : 'SSC CGL'; // Context based on test ID
+       try {
+           const aiData = await aiTutorService.generateMockQuestions(
+               subject === 'Banking' ? 'Quantitative Aptitude, Reasoning' : 'General Awareness, English, Quantitative Aptitude', 
+               count, 
+               subject
+           );
+           
+           if (aiData.length > 0) {
+               const aiQuestions: Question[] = aiData.map((q, idx) => ({
+                   id: `ai_${testId}_${Date.now()}_${idx}`,
+                   testId: testId,
+                   text: q.questionText,
+                   subject: q.subject || 'General',
+                   // Correctly map AI difficulty or default to MEDIUM
+                   difficulty: (q.difficulty === 'MODERATE' ? 'MEDIUM' : q.difficulty) as 'EASY' | 'MEDIUM' | 'HARD',
+                   positiveMarks: 2,
+                   negativeMarks: 0.5,
+                   status: 'PUBLISHED',
+                   options: q.options.map((optText: string, oIdx: number) => ({
+                       id: `opt_${idx}_${oIdx}`,
+                       text: optText,
+                       isCorrect: oIdx === q.correctOptionIndex
+                   }))
+               }));
+               
+               // Combine with static pool for variety if needed, or just use AI
+               const combined = [...QUESTION_POOL.slice(0, 5), ...aiQuestions];
+               // Update Cache
+               generatedQuestionBank[testId] = combined;
+               return combined;
+           }
+       } catch (err) {
+           console.warn("AI Generation failed, falling back to dummy", err);
+       }
+    }
+
+    // 4. FALLBACK (Legacy/Offline Mode)
     return new Promise((resolve) => {
       if (testId === 'mock_10' || testId === 'mock_25') {
           const requiredCount = testId === 'mock_10' ? 10 : 25;
-          const fullPool = [...QUESTION_POOL, ...generateQuestions(testId, 30)];
+          const fullPool = [...QUESTION_POOL, ...generateDummyQuestions(testId, 30)];
           const shuffled = shuffle(fullPool);
           const selected = shuffled.slice(0, requiredCount).map(q => ({
               ...q, 
               testId: testId
           }));
+          generatedQuestionBank[testId] = selected;
           setTimeout(() => resolve(selected), 400);
           return;
       }
       const test = TESTS.find(t => t.id === testId);
-      const count = (test && test.type === 'UNLIMITED') ? 20 : 5;
+      const limit = (test && test.type === 'UNLIMITED') ? 20 : 5;
+      
+      let finalQuestions: Question[] = [];
       if (testId === 't1') {
-           setTimeout(() => resolve([...QUESTION_POOL.slice(0, 5)]), 400);
+           finalQuestions = [...QUESTION_POOL.slice(0, 5)];
       } else {
-           setTimeout(() => resolve(generateQuestions(testId, count)), 400);
+           finalQuestions = generateDummyQuestions(testId, limit);
       }
+      generatedQuestionBank[testId] = finalQuestions;
+      setTimeout(() => resolve(finalQuestions), 400);
     });
   },
 
   fetchMoreQuestions: async (testId: string, currentCount: number): Promise<Question[]> => {
+      // For unlimited mode, generate batches
+      if (aiTutorService.hasApiKey()) {
+          const aiData = await aiTutorService.generateMockQuestions('General Awareness, Reasoning', 5, 'SSC CGL');
+          const aiQuestions: Question[] = aiData.map((q, idx) => ({
+               id: `ai_inf_${currentCount + idx}`,
+               testId: testId,
+               text: q.questionText,
+               subject: q.subject,
+               difficulty: (q.difficulty === 'MODERATE' ? 'MEDIUM' : q.difficulty) as 'EASY' | 'MEDIUM' | 'HARD',
+               positiveMarks: 2,
+               negativeMarks: 0.5,
+               status: 'PUBLISHED',
+               options: q.options.map((optText: string, oIdx: number) => ({
+                   id: `opt_inf_${currentCount + idx}_${oIdx}`,
+                   text: optText,
+                   isCorrect: oIdx === q.correctOptionIndex
+               }))
+          }));
+          
+          // Append to cache so grading works later
+          if (!generatedQuestionBank[testId]) generatedQuestionBank[testId] = [];
+          generatedQuestionBank[testId] = [...generatedQuestionBank[testId], ...aiQuestions];
+          
+          return aiQuestions;
+      }
+
       return new Promise((resolve) => {
-          setTimeout(() => resolve(generateQuestions(testId, 10, currentCount)), 400);
+          const newQs = generateDummyQuestions(testId, 10, currentCount);
+           if (!generatedQuestionBank[testId]) generatedQuestionBank[testId] = [];
+          generatedQuestionBank[testId] = [...generatedQuestionBank[testId], ...newQs];
+          setTimeout(() => resolve(newQs), 400);
       });
   },
 
@@ -253,7 +340,12 @@ export const db = {
     let totalScore = 0;
     let correctCount = 0;
     const mistakes: any[] = [];
-    const universe = [...QUESTION_POOL, ...generateQuestions(testId, 100)]; 
+    
+    // CRITICAL FIX: Use the Cached Question Bank for Grading
+    // Previously, this regenerated dummy questions, causing ID mismatch for AI questions
+    const sessionQuestions = generatedQuestionBank[testId] || [];
+    const universe = [...QUESTION_POOL, ...sessionQuestions]; 
+    
     const qMap = new Map(universe.map(q => [q.id, q]));
 
     Object.keys(answers).forEach(qId => {
@@ -296,9 +388,13 @@ export const db = {
   getMistakeBook: async (userId: string): Promise<Mistake[]> => {
     const allMistakes = JSON.parse(localStorage.getItem('mistakes') || '[]');
     const userMistakes = allMistakes.filter((m: any) => m.userId === userId);
-    const universe = [...QUESTION_POOL, ...generateQuestions('universal', 100)];
+    
+    // Need to search in all generated banks
+    const allGeneratedQs = Object.values(generatedQuestionBank).flat();
+    const universe = [...QUESTION_POOL, ...allGeneratedQs];
+    
     const enrichedMistakes: Mistake[] = userMistakes.map((m: any) => {
-        const question = universe.find(q => q.id === m.questionId) || generateQuestions('fallback', 1, 0)[0];
+        const question = universe.find(q => q.id === m.questionId) || generateDummyQuestions('fallback', 1, 0)[0];
         return question ? { question, userAnswerId: m.selectedOptionId, attemptDate: m.attemptDate } : null;
     }).filter((m: any) => m !== null);
     return new Promise(resolve => resolve(enrichedMistakes.reverse()));
