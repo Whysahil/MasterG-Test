@@ -1,11 +1,9 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 
 // Initialize AI Client
-// Use optional chaining (?.) for import.meta.env to prevent crashes in some environments.
 // @ts-ignore
 const API_KEY = import.meta.env?.VITE_API_KEY || '';
 
-// Initialize client only if API Key exists to prevent "API key must be set" error
 let ai: GoogleGenAI | null = null;
 if (API_KEY) {
   try {
@@ -15,7 +13,7 @@ if (API_KEY) {
   }
 }
 
-// CACHE SIMULATION (Session Storage)
+// CACHE SIMULATION
 const getCachedExplanation = (key: string) => sessionStorage.getItem(`ai_cache_${key}`);
 const setCachedExplanation = (key: string, value: string) => sessionStorage.setItem(`ai_cache_${key}`, value);
 
@@ -35,30 +33,26 @@ export const aiTutorService = {
     const cached = getCachedExplanation(cacheKey);
     if (cached) return cached;
 
-    // 2. Fallback for demo if no client or key
-    if (!ai) {
-      return `**[DEMO MODE: AI KEY NOT FOUND]**\n\nTo see real AI responses, please configure VITE_API_KEY in your Vercel Environment Variables.\n\n**Simulated Explanation:**\n\n1. **Concept**: The question asks about ${subject}.\n2. **Solution**: The correct logic involves applying the basic formula.\n3. **Shortcut**: Use the elimination method.`;
-    }
+    // 2. Fallback
+    if (!ai) return "**AI unavailable. Please check your API Key.**";
 
     const correctOption = options.find(o => o.isCorrect);
     const userOption = options.find(o => o.id === userSelectedId);
 
     const prompt = `
-      You are "MasterG", a top-tier faculty for Indian Competitive Exams (SSC CGL, SBI PO, UPSC).
+      You are "MasterG", India's top Faculty for Government Exams.
       
-      **Student Context**:
+      **Context**:
       - Subject: ${subject}
       - Question: "${questionText}"
       - Options: ${options.map(o => `${o.text} ${o.isCorrect ? '(Correct)' : ''}`).join(', ')}
-      - Student's Answer: "${userOption ? userOption.text : 'Skipped'}" (Wrong)
+      - Student's Wrong Answer: "${userOption ? userOption.text : 'Skipped'}"
       
-      **Goal**: Explain the solution in **HINGLISH** (Hindi + English mix) so it feels like a friendly teacher explaining in a classroom.
-      
-      **Output Format (Markdown)**:
-      1. 🧠 **Concept**: Explain the underlying theory briefly.
-      2. 📝 **Detailed Solution**: Step-by-step calculation or logic.
-      3. ⚡ **MasterG Shortcut**: The "Exam Trick" to solve this in 10 seconds (e.g., Option Elimination, Digital Sum, Root Word).
-      4. 💡 **Pro Tip**: A memory aid or mnemonic.
+      **Task**: Explain the solution in **Hinglish** (Hindi+English mix).
+      **Format**:
+      1. 🧠 **Concept**: The core logic.
+      2. 📝 **Solution**: Step-by-step.
+      3. ⚡ **Exam Trick**: Shortest method.
     `;
 
     try {
@@ -67,60 +61,53 @@ export const aiTutorService = {
         contents: prompt,
         config: { temperature: 0.7 }
       });
-      
-      const text = response.text || "Sorry, I couldn't generate an explanation right now.";
-      
-      // 3. Save to Cache
+      const text = response.text || "Explanation not generated.";
       setCachedExplanation(cacheKey, text);
       return text;
-
     } catch (error) {
-      console.error("AI Generation Error:", error);
-      return "⚠️ **AI Network Error**: Unable to connect to the MasterG AI Tutor. Please try again later.";
+      return "⚠️ Network Error during AI Explanation.";
     }
   },
 
   getAttemptAnalysis: async (testTitle: string, score: number, totalMarks: number, accuracy: number, weakTopics: string[]): Promise<string> => {
-     if (!ai) return "Great effort! Focus on your accuracy and review the subjects where you lost marks.";
+     if (!ai) return "Great effort! Focus on your accuracy.";
      return "Keep practicing!";
   },
 
   /**
-   * Generates real exam questions using the Senior Exam Setter Persona.
+   * Generates REAL EXAM QUESTIONS based on strict Gov Exam Syllabus.
    */
-  generateMockQuestions: async (subject: string, count: number, examType: string = 'SSC CGL'): Promise<any[]> => {
+  generateMockQuestions: async (context: string, count: number, examCategory: string): Promise<any[]> => {
     if (!ai) return [];
 
     const prompt = `
-You are a senior Government Exam Paper Setter, Exam Analyst, and AI Question Generation Expert with deep knowledge of Indian competitive exams.
-
-Your task is to generate ${count} HIGH-QUALITY, REALISTIC, EXAM-LEVEL MCQ QUESTIONS.
-
-================================================
-EXAM CONTEXT
-================================================
-Exam Type: ${examType}
-Subject: ${subject}
+You are a Senior Government Exam Paper Setter (15+ Years Experience).
+Your task is to generate ${count} REALISTIC MCQ QUESTIONS for:
+**Exam**: ${examCategory}
+**Context/Topic**: ${context}
 
 ================================================
-STRICT GENERATION RULES
+CRITICAL RULES (STRICT ADHERENCE REQUIRED)
 ================================================
-1. GENERATE ONLY questions that have been asked before (PYQ) OR expected questions based on trends.
-2. NO generic, instructional, or dummy questions.
-3. Questions must be indistinguishable from real government exam questions.
-4. If Subject = Quantitative Aptitude, include values that are calculation-friendly but tricky.
-5. If Subject = General Awareness, focus on Static GK or Current Affairs (last 1-2 years).
+1. **NO FAKE QUESTIONS**: Generate ONLY questions that follow the exact pattern of previous years (PYQ).
+2. **SOURCE ATTRIBUTION**: In the explanation, you MUST explicitly state if this is a "Previous Year Question" (with Year) or an "Expected Question" based on trends.
+3. **DIFFICULTY**: Mix of Easy (30%), Moderate (50%), Hard (20%).
+4. **FORMAT**: Strict JSON.
+5. **LANGUAGE**: Professional Exam English.
 
 ================================================
-OUTPUT FORMAT (JSON)
+OUTPUT SCHEMA (JSON Array)
 ================================================
-Return a JSON Array. Each object must have:
-- questionText: The exact exam-style question string.
-- options: An array of exactly 4 strings.
-- correctOptionIndex: Integer (0-3).
-- explanation: A detailed explanation including the 'Question Source' (e.g., 'Previous Year Question (SSC CGL 2022)' or 'Expected Question based on trend').
-- subject: The specific topic (e.g., 'Polity', 'Profit & Loss').
-- difficulty: One of 'EASY', 'MEDIUM', 'HARD'.
+[
+  {
+    "questionText": "Exact Question String",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correctOptionIndex": 0, (0-3)
+    "explanation": "Detailed solution + Source: [SSC CGL 2022 / Expected]",
+    "subject": "Topic Name (e.g. Algebra, Polity)",
+    "difficulty": "EASY" | "MEDIUM" | "HARD"
+  }
+]
     `;
 
     try {
@@ -154,7 +141,7 @@ Return a JSON Array. Each object must have:
       }
       return [];
     } catch (e) {
-      console.error("Failed to generate questions", e);
+      console.error("AI Question Generation Failed", e);
       return [];
     }
   },
