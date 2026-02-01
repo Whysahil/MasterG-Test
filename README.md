@@ -1,11 +1,41 @@
-<div align="center">
+# MasterG - Government Exam Preparation Platform
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+A full-stack DBMS Project designed for college submissions. This application simulates a real-world EdTech platform for exams like SSC, Banking, and UPSC.
 
-  <h1>Built with AI Studio</h2>
+## 🚀 Features
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+1.  **Exam Interface**: Real-time timer, question palette, and review marking.
+2.  **DBMS-Driven Leaderboard**: Ranks students using SQL Aggregations.
+3.  **Analytics**: detailed breakdowns of accuracy and time management.
+4.  **Admin Panel**: Bulk CSV upload simulation for question entry.
+5.  **Transaction Logic**: Ensures data integrity during test submission.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## 🛠️ Tech Stack
 
-</div>
+*   **Frontend**: React.js (TypeScript), Tailwind CSS, Vite.
+*   **Data Simulation**: LocalStorage-based Mock DB (for instant demo without backend setup).
+*   **Database Design**: MySQL (Schema provided in `backend/schema.sql`).
+
+## 📂 Project Structure
+
+*   `src/pages`: Individual screens (Dashboard, Test, Result).
+*   `src/services`: Mock backend logic (`mockDatabase.ts`) mimicking API calls.
+*   `backend`: Contains the SQL schema file required for the Viva.
+
+## 🎓 DBMS Viva Questions Preparedness
+
+1.  **Normalization**: The database is in 3NF. `options` are separated from `questions` to prevent repeating groups (1NF) and transitive dependencies.
+2.  **Transactions**: The test submission process involves inserting into `attempt_history` and `attempt_details`. This must be atomic. If detail insertion fails, the history record is rolled back.
+3.  **Indexes**: We use indexes on `(user_id, score)` in the history table to make the Leaderboard query `ORDER BY score DESC` faster.
+
+## 🏃‍♂️ How to Run
+
+1.  Clone repository.
+2.  `npm install`
+3.  `npm start`
+4.  Open `http://localhost:3000`
+
+## 👨‍💻 Admin Credentials (Demo)
+
+*   **Email**: admin@masterg.com
+*   **Role**: Select "Admin" on login screen.
